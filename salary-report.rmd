@@ -1,0 +1,172 @@
+---
+title: "ASU Salary Report"
+output:
+  html_document:
+    theme: readable
+    highlight: zenburn
+    toc: true
+params:
+  url:
+    value: x  
+---
+
+
+
+<br>
+<hr>
+<br>
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set( echo = F, message=F, warning=F )
+
+```
+
+
+```{r libraries, echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(pander)
+library(knitr)
+library(gender)
+library(ggplot2)
+
+source("utils.R")
+```
+
+
+
+```{r data}
+# LOAD DATA
+URL <- params$url
+d <- read.csv(URL)
+
+# DATA PROCESSING
+d$first.name <- get_first_name(d$Full.Name)
+d <- add_gender(d)
+d <- get_fte(d)
+d <- add_titles(d)
+d <- get_study_sample(d)
+d$salary <- unstring_salary(d$Salary)
+
+# Filter for relevant academic units
+d <- d %>% 
+  filter(title != "" & !is.na(title)) %>% 
+  filter(Department.Description %in% academic.units)
+```
+
+
+<br>
+<hr>
+<br>
+
+
+
+
+
+### ** Salary Range by Rank and Gender**
+
+```{r salary-summary, results="asis", fig.height=7, fig.width=10}
+t.salary <- d %>% 
+  group_by(title, gender) %>% 
+  summarize(
+    q25 = quantile(salary, 0.25),
+    q50 = quantile(salary, 0.50),
+    q75 = quantile(salary, 0.75),
+    n = n()
+  ) %>% 
+  ungroup() %>% 
+  mutate(p = round(n / sum(n), 2))
+
+# Generate overall salary graph
+t.salary %>% build_graph(unit="ALL ASU")
+
+# Format currency
+t.salary$q25 <- dollarize(t.salary$q25)
+t.salary$q50 <- dollarize(t.salary$q50)
+t.salary$q75 <- dollarize(t.salary$q75)
+
+# Display table
+t.salary %>% knitr::kable(format="html")
+```
+
+
+
+<br>
+<hr>
+<br>
+
+
+### ** Top Five Salaries**
+```{r top-salaries, results="asis"}
+
+top_salaries <- top_five_salaries(d)
+
+knitr::kable(top_salaries, format = "html", caption = "**Top Five Salaries**")
+
+```
+
+
+
+<br>
+<hr>
+<br>
+
+
+### ** Generate Reports by Department**
+```{r department-reports, results="asis", fig.height=7, fig.width=10}
+for (i in academic.units) {
+  
+  d2 <- filter(d, Department.Description == i)
+  if (nrow(d2) == 0) { next } 
+
+  t.salary <- create_salary_table(d2)
+  build_graph(t.salary, unit = i)
+
+ 
+  cat("\n##", i, "\n")  
+
+  knitr::kable(t.salary, format = "html", caption = paste("Salary Summary for", i))
+
+  knitr::kable(top_five_salaries(d2), format = "html", caption = paste("Top Five Salaries in", i))
+
+  cat("\n---\n")  
+}
+
+```
+
+
+
+
+
+
+<style>
+
+td {
+    padding: 3px 15px 3px 15px;
+    text-align: center !important;
+}
+
+th {
+    padding: 3px 15px 3px 15px;
+    text-align: center !important;
+    font-weight: bold;
+    color: SlateGray !important;
+}
+
+h1 { 
+    color: SlateGray !important;
+    font-size: 2.05em;
+    margin-top: 25px;
+    
+}
+
+h3 { 
+    color: SlateGray;
+    margin-top: 25px;
+}
+
+</style>
+
+
